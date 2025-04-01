@@ -12,46 +12,84 @@ namespace IGtoOBJGen
 
         public Communicate(string adbPath) 
         {
-            server = new AdbServer();
-            var result = server.StartServer(adbPath,restartServerIfNewer:false);
-            client = new AdbClient();
-            List<DeviceData> devices = client.GetDevices();
-            foreach(var device in devices)
+            try
             {
-                if (device.Model == "Quest_2" || device.Model == "Quest_3")
+                server = new AdbServer();
+                var result = server.StartServer(adbPath, restartServerIfNewer: false);
+                Console.WriteLine($"ADB Server Start Result: {result}");
+                client = new AdbClient();
+                Console.WriteLine("ADB Client initialized.");
+                List<DeviceData> devices = client.GetDevices();
+                if (devices.Count == 0)
                 {
-                    oculusDevice = device;
+                    Console.WriteLine("Devices list is empty");
                 }
-            }
-        }
-        public void UploadFiles(string binPath)
-        {
-            DirectoryInfo dir = new DirectoryInfo(binPath); 
-            foreach (var path in dir.GetFiles())
-            {
-                using (SyncService service = new SyncService(new AdbSocket(new IPEndPoint(IPAddress.Loopback, AdbClient.AdbServerPort)), oculusDevice)) 
-                {                
-                    using (Stream stream = File.OpenRead(path.FullName))
+                foreach (var device in devices)
+                {
+                    Console.WriteLine($"Found device: {device.Serial}, State: {device.State}, Model: {device.Model}");
+                    if (device.Model == "Quest_2" || device.Model == "Quest_3")
                     {
-                        service.Push(stream, $"/data/local/tmp/obj/{path.Name}", 444, DateTime.Now, null, CancellationToken.None);
+                        oculusDevice = device;
+                        Console.WriteLine("Quest 2 or Quest 3 found and connected to");
                     }
                 }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing ADB: {ex.Message}");
+                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+            }
 
-            
+        }
+        public void UploadFiles(string binPath)
+        {
+            try
+            {
+                DirectoryInfo dir = new DirectoryInfo(binPath);
+                foreach (var path in dir.GetFiles())
+                {
+                    using (SyncService service = new SyncService(new AdbSocket(new IPEndPoint(IPAddress.Loopback, AdbClient.AdbServerPort)), oculusDevice))
+                    {
+                        using (Stream stream = File.OpenRead(path.FullName))
+                        {
+                            service.Push(stream, $"/data/local/tmp/obj/{path.Name}", 444, DateTime.Now, null, CancellationToken.None);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ADB Upload Files failed: {ex.Message}");
+            }     
         }
         public void ClearFiles()
         {
-            var receiver = new ConsoleOutputReceiver();
-            client.ExecuteRemoteCommand("rm /data/local/tmp/obj/*", oculusDevice, receiver);
+            try
+            {
+                var receiver = new ConsoleOutputReceiver();
+                client.ExecuteRemoteCommand("rm /data/local/tmp/obj/*", oculusDevice, receiver);
+                Console.WriteLine("Files cleared successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ADB Clear Files failed: {ex.Message}");
+            }
         }
         public void DownloadFiles(string fileName)
         {
-            using (SyncService service = new SyncService(new AdbSocket(new IPEndPoint(IPAddress.Loopback, AdbClient.AdbServerPort)), oculusDevice))
-            using (Stream stream = File.OpenWrite(@"C:\Users\uclav\Desktop\yessir.obj"))
+            try
             {
-                service.Pull($"/data/local/tmp/{fileName}", stream, null, CancellationToken.None);
+                using (SyncService service = new SyncService(new AdbSocket(new IPEndPoint(IPAddress.Loopback, AdbClient.AdbServerPort)), oculusDevice))
+                using (Stream stream = File.OpenWrite(@"C:\Users\uclav\Desktop\yessir.obj"))
+                {
+                    service.Pull($"/data/local/tmp/{fileName}", stream, null, CancellationToken.None);
+                }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ADB Download Files failed: {ex.Message}");
+            }
+
         }
     }
 }
